@@ -26,9 +26,8 @@ def upsert_users():
                 execute_batch(cursor, """
                                       INSERT INTO users (user_id, user_phone)
                                       VALUES (%s, %s) ON CONFLICT(user_id) 
-                                      DO
-                                      UPDATE SET user_phone = EXCLUDED.user_phone;
-                                      """, data)
+                                      DO UPDATE SET user_phone = EXCLUDED.user_phone;
+                                      """.strip(), data)
 
         # Коммитим все изменения.
         conn.commit()
@@ -43,10 +42,10 @@ def upsert_drivers():
                 data = list(data.itertuples(index=False, name=None))
                 execute_batch(cursor, """
                                       INSERT INTO drivers (driver_id, driver_phone)
-                                      VALUES (%s, %s) ON CONFLICT(driver_id) 
-                DO
+                                      VALUES (%s, %s) ON CONFLICT(driver_id)
+                                      DO
                                       UPDATE SET driver_phone = EXCLUDED.driver_phone;
-                                      """, data)
+                                      """.strip(), data)
 
         # Коммитим все изменения.
         conn.commit()
@@ -65,7 +64,7 @@ def upsert_addresses():
                 execute_batch(cursor, """
                                       INSERT INTO addresses (address)
                                       VALUES (%s) ON CONFLICT(address) DO NOTHING;
-                                      """, data)
+                                      """.strip(), data)
 
         # Коммитим все изменения.
         conn.commit()
@@ -80,7 +79,7 @@ def upsert_categories():
                 execute_batch(cursor, """
                                       INSERT INTO categories (category_name)
                                       VALUES (%s) ON CONFLICT(category_name) DO NOTHING;
-                                      """, data)
+                                      """.strip(), data)
 
         # Коммитим все изменения.
         conn.commit()
@@ -102,10 +101,10 @@ def upsert_stores():
                                INSERT INTO stores (store_id, store_address_id)
                                SELECT tmp.store_id, a.address_id
                                FROM tmp_stores tmp
-                                        JOIN addresses a ON tmp.store_address = a.address ON CONFLICT(store_id) DO
-                               UPDATE
-                                   SET store_address_id = EXCLUDED.store_address_id;
-                               """)
+                               JOIN addresses a ON tmp.store_address = a.address 
+                               ON CONFLICT(store_id) DO UPDATE
+                               SET store_address_id = EXCLUDED.store_address_id;
+                               """.strip())
 
                 # Убираем временную таблицу.
                 cursor.execute("DROP TABLE tmp_stores;")
@@ -132,11 +131,11 @@ def upsert_items():
                                INSERT INTO items (item_id, item_title, category_id)
                                SELECT tmp.item_id, tmp.item_title, c.category_id
                                FROM tmp_items tmp
-                                        JOIN categories c ON tmp.item_category = c.category_name ON CONFLICT(item_id) DO
-                               UPDATE
-                                   SET item_title = EXCLUDED.item_title,
+                               JOIN categories c ON tmp.item_category = c.category_name 
+                               ON CONFLICT(item_id) DO UPDATE
+                               SET item_title = EXCLUDED.item_title,
                                    category_id = EXCLUDED.category_id;
-                               """)
+                               """.strip())
 
                 # Убираем временную таблицу.
                 cursor.execute("DROP TABLE tmp_items;")
@@ -166,7 +165,7 @@ def upsert_orders():
                                         order_discount DECIMAL,
                                         order_cancellation_reason TEXT
                                     );
-                               """)
+                               """.strip())
 
                 # Заполняем временную таблицу.
                 data = list(df[[
@@ -185,7 +184,7 @@ def upsert_orders():
                                                               paid_at,
                                                               payment_type, order_discount, order_cancellation_reason)
                                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
-                                      """, data)
+                                      """.strip(), data)
 
                 # Переносим все в основную таблицу.
                 cursor.execute("""
@@ -211,7 +210,7 @@ def upsert_orders():
                                    payment_type = EXCLUDED.payment_type,
                                    order_discount = EXCLUDED.order_discount,
                                    order_cancellation_reason = EXCLUDED.order_cancellation_reason;
-                               """)
+                               """.strip())
 
                 # Убираем временную таблицу.
                 cursor.execute("DROP TABLE tmp_orders;")
@@ -229,7 +228,7 @@ def upsert_order_items():
                 data = df[["order_id", "item_id", "item_quantity", "item_price", "item_canceled_quantity",
                            "item_replaced_id", "item_discount"]]
                 data = [
-                    tuple(None if pd.isna(x) else x for x in row)
+                    tuple(None if pd.isna(x) else int(x) for x in row)
                     for row in data.itertuples(index=False, name=None)
                 ]
 
@@ -237,14 +236,14 @@ def upsert_order_items():
                 execute_batch(cursor, """
                                       INSERT INTO order_items (order_id, item_id, item_quantity, item_price,
                                                                item_canceled_quantity, item_replaced_id, item_discount)
-                                      VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT(order_item_id) DO
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT(order_id, item_id) DO
                                       UPDATE SET
                                           item_quantity = EXCLUDED.item_quantity,
                                           item_price = EXCLUDED.item_price,
                                           item_canceled_quantity = EXCLUDED.item_canceled_quantity,
                                           item_replaced_id = EXCLUDED.item_replaced_id,
                                           item_discount = EXCLUDED.item_discount;
-                                      """, data)
+                                      """.strip(), data)
 
         # Коммитим все изменения.
         conn.commit()
@@ -263,19 +262,17 @@ def upsert_deliveries():
                 execute_batch(cursor, """
                                       INSERT INTO deliveries (order_id, driver_id, started_at, finished_at,
                                                               cancelled_at)
-                                      VALUES (%s, %s, %s, %s, %s) ON CONFLICT(delivery_id) DO
+                                      VALUES (%s, %s, %s, %s, %s) ON CONFLICT(order_id, driver_id, started_at) DO
                                       UPDATE SET
                                           driver_id = EXCLUDED.driver_id,
-                                          started_at = EXCLUDED.started_at,
                                           finished_at = EXCLUDED.finished_at,
                                           cancelled_at = EXCLUDED.cancelled_at;
-                                      """, data)
+                                      """.strip(), data)
 
         # Коммитим все изменения.
         conn.commit()
 
-
-with (DAG(dag_id="deliveries_replication", start_date=datetime(2026, 3, 8)) as dag):
+with DAG(dag_id="deliveries_replication", start_date=datetime(2026, 3, 8)) as dag:
     begin, end = EmptyOperator(task_id="begin"), EmptyOperator(task_id="end")
     between_step = EmptyOperator(task_id="between_step")
 
@@ -291,15 +288,10 @@ with (DAG(dag_id="deliveries_replication", start_date=datetime(2026, 3, 8)) as d
     deliveries_upsert_task = PythonOperator(task_id="deliveries_upsert", python_callable=upsert_deliveries)
 
     # Строим пайплайн.
-    begin >> [
-        users_upsert_task,
-        drivers_upsert_task,
-        addresses_upsert_task,
-        categories_upsert_task,
-    ] >> between_step >> [
-        stores_upsert_task,
-        items_upsert_task,
-    ] >> orders_upsert_task >> [
-        order_items_upsert_task,
-        deliveries_upsert_task,
-    ] >> end
+    begin >> [users_upsert_task, drivers_upsert_task, addresses_upsert_task, categories_upsert_task]
+    addresses_upsert_task >> stores_upsert_task
+    categories_upsert_task >> items_upsert_task
+    [users_upsert_task, stores_upsert_task, addresses_upsert_task] >> orders_upsert_task
+    [orders_upsert_task, items_upsert_task] >> order_items_upsert_task
+    [orders_upsert_task, drivers_upsert_task] >> deliveries_upsert_task
+    [order_items_upsert_task, deliveries_upsert_task] >> end

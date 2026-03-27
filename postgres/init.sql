@@ -79,3 +79,13 @@ CREATE TABLE deliveries
     finished_at  TIMESTAMP,
     cancelled_at TIMESTAMP
 );
+
+-- Добавим композитный уникальный индекс для покупок внутри заказа.
+-- Добавим композитный уникальный индекс для доставок.
+ALTER TABLE order_items ADD CONSTRAINT unique_order_item UNIQUE (order_id, item_id);
+ALTER TABLE deliveries ADD CONSTRAINT unique_deliveries UNIQUE (order_id, driver_id, started_at);
+
+-- Ускоряем поиск ID адреса по его тексту (для магазинов и заказов)
+-- Ускоряем поиск ID категории по названию (для товаров)
+CREATE INDEX IF NOT EXISTS idx_addresses_text ON addresses (address);
+CREATE INDEX IF NOT EXISTS idx_categories_name ON categories (category_name);
