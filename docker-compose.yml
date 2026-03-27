@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: python_user
+      POSTGRES_PASSWORD: python_password
+      POSTGRES_DB: python_database
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+
+  airflow:
+    image: apache/airflow:3.1.6
+    entrypoint: /bin/bash
+    command: /start.sh
+    environment:
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    depends_on:
+      - postgres
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./dataset:/opt/airflow/dataset
+      - ./airflow/start.sh:/start.sh
+      - airflow_data:/opt/airflow
+    ports:
+      - "8080:8080"
+
+  pgAdmin:
+    image: dpage/pgadmin4:9.13.0
+    environment:
+      PGADMIN_DEFAULT_EMAIL: test@test.ru
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "8081:80"
+
+volumes:
+  airflow_data:
+  pgadmin_data:
+  pgdata:
